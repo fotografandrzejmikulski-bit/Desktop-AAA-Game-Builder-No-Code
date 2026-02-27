@@ -8,7 +8,7 @@ namespace AAA.Core.Conversation;
 public enum StatusKomendy
 {
     Sukces,
-    WymageNaprawy,
+    WymagaNaprawy,
     Blad
 }
 
@@ -43,7 +43,7 @@ public static class WygenerujGreCommand
 
             return new WynikKomendy
             {
-                Status = StatusKomendy.WymageNaprawy,
+                Status = StatusKomendy.WymagaNaprawy,
                 Komunikat = $"Wygenerowany GDD zawiera {wynikWalidacji.Bledy.Count(b => b.Waznosc == Waznosc.Blad)} błąd(y) krytyczne. Przygotowano żądanie naprawy.",
                 ZadanieNaprawy = repairRequest,
                 WygenerowaneDraft = wygenerowaneDraft
@@ -68,7 +68,7 @@ public static class WygenerujGreCommand
         if (wynikWalidacji.MaBledyKrytyczne)
             return new WynikKomendy
             {
-                Status = StatusKomendy.WymageNaprawy,
+                Status = StatusKomendy.WymagaNaprawy,
                 Komunikat = "Nie można zatwierdzić GDD zawierającego błędy krytyczne.",
                 ZadanieNaprawy = RepairRequestBuilder.Zbuduj(stan.Gdd.Roboczy, wynikWalidacji, stan.Gdd.Zatwierdzony)
             };
