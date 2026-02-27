@@ -16,7 +16,9 @@ src/
       Validation/     — walidator GDD z komunikatami po polsku
       AutoNaprawa/    — budowanie promptu do AI w celu naprawy błędnego GDD
     Storage/          — stan projektu (ProjectState, GddDocument)
-    Conversation/     — obsługa komend czatu (WygenerujGreCommand)
+    Conversation/     — obsługa komend czatu, wykrywanie intencji, historia rozmowy
+    LLM/              — interfejs IKlientLLM, OpenAiKlientLLM, OrkiestratorNaprawy, UstawieniaLLM
+    Build/            — GddRenderer (Markdown), ProjectBuilder (pliki projektu)
 tests/
   AAA.Core.Tests/     — testy jednostkowe xUnit
 ```
@@ -38,22 +40,25 @@ tests/
 - **WygenerujGreCommand** – integruje walidację z przepływem generowania gry; przy błędach krytycznych zwraca `RepairRequest` zamiast proponować zatwierdzenie
 - **8 testów jednostkowych** (xUnit)
 
-### 🔲 Moduł 2 – Warstwa konwersacji (planowany)
+### ✅ Moduł 2 – Warstwa konwersacji
 
-- Parsowanie intencji użytkownika z tekstu po polsku
-- Routing komend (generuj / zatwierdź / edytuj sekcję / pokaż podgląd)
-- Historia rozmowy i kontekst sesji
+- Parsowanie intencji użytkownika z tekstu po polsku (`AnalizatorIntencji`)
+- Routing komend (generuj / zatwierdź / edytuj sekcję / pokaż podgląd / nowa sesja / pokaż błędy)
+- Historia rozmowy i kontekst sesji (`HistoriaRozmowy`)
 
-### 🔲 Moduł 3 – Integracja z LLM (planowany)
+### ✅ Moduł 3 – Integracja z LLM
 
-- Klient HTTP do wybranego LLM (OpenAI / Azure OpenAI / lokalny model)
-- Obsługa re-ask: wysłanie `RepairRequest.Prompt`, odebranie poprawionego JSON i ponowna walidacja
-- Timeout i retry
+- Klient HTTP kompatybilny z API OpenAI (`OpenAiKlientLLM`) – retry, timeout, obsługa 401/429
+- Persystowane ustawienia LLM (`UstawieniaLLM`) – klucz API, endpoint, model
+- Orkiestrator iteracyjnej naprawy GDD przez AI (`OrkiestratorNaprawy`)
+- Okno ustawień LLM z testem połączenia (`SettingsWindow`)
 
-### 🔲 Moduł 4 – Podgląd i Build (planowany)
+### ✅ Moduł 4 – Podgląd i Build
 
-- Renderer podglądu GDD w formacie czytelnym dla użytkownika
-- Generowanie plików projektu gry na podstawie zatwierdzonego GDD
+- Renderer podglądu GDD w formacie Markdown (`GddRenderer`)
+- Generowanie plików projektu gry na podstawie zatwierdzonego GDD (`ProjectBuilder`)
+- Panel podglądu GDD w MainWindow (split-panel layout)
+- Eksport GDD do pliku Markdown
 
 ## Wymagania
 

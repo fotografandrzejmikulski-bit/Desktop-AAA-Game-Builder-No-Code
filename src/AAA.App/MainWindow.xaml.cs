@@ -1,12 +1,16 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
 using Microsoft.Win32;
+using AAA.Core.Build;
 using AAA.Core.Conversation;
 using AAA.Core.GameDesign.Models;
 using AAA.Core.GameDesign.Validation;
+using AAA.Core.LLM;
 using AAA.Core.Storage;
 
 namespace AAA.App;
@@ -15,6 +19,8 @@ public partial class MainWindow : Window
 {
     private readonly ObservableCollection<ChatWiadomosc> _wiadomosci = [];
     private ProjectState _stan = new();
+    private HistoriaRozmowy _historia = new();
+    private UstawieniaLLM _ustawieniaLLM = UstawieniaLLM.Wczytaj();
 
     private static readonly JsonSerializerOptions _jsonOpts = new()
     {
@@ -27,6 +33,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         ChatItems.ItemsSource = _wiadomosci;
+        OdswiezStatusLLM();
         DodajWiadomoscBota(
             "Witaj! Jestem AAA Game Builder.\n\n" +
             "Opisz swoją grę po polsku – powiedz mi o gatunku, świecie, postaciach i questach. " +
@@ -35,14 +42,25 @@ public partial class MainWindow : Window
             "Wpisz swój pomysł poniżej i kliknij Wyślij.");
     }
 
-    private void Wyslij_Click(object sender, RoutedEventArgs e) => PrzetworzWejscie();
+    private async void Wyslij_Click(object sender, RoutedEventArgs e) => await PrzetworzWejscieAsync();
 
-    private void InputBox_KeyDown(object sender, KeyEventArgs e)
+    private async void InputBox_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.None)
         {
             e.Handled = true;
-            PrzetworzWejscie();
+            await PrzetworzWejscieAsync();
+        }
+    }
+
+    private void Ustawienia_Click(object sender, RoutedEventArgs e)
+    {
+        var win = new SettingsWindow(_ustawieniaLLM) { Owner = this };
+        if (win.ShowDialog() == true)
+        {
+            _ustawieniaLLM = UstawieniaLLM.Wczytaj();
+            OdswiezStatusLLM();
+            DodajWiadomoscBota("⚙ Ustawienia LLM zapisane.");
         }
     }
 
@@ -56,7 +74,10 @@ public partial class MainWindow : Window
         {
             _wiadomosci.Clear();
             _stan = new ProjectState();
+            _historia.Wyczysc();
             ApproveButton.Visibility = Visibility.Collapsed;
+            OdswiezPodglad();
+            OdswiezPrzyciski();
             UstawStatus("Nowa sesja – gotowy.");
             DodajWiadomoscBota("Sesja zresetowana. Opisz nową grę.");
         }
@@ -98,6 +119,8 @@ public partial class MainWindow : Window
             _stan = ProjectState.WczytajZPliku(dialog.FileName);
             _wiadomosci.Clear();
             ApproveButton.Visibility = _stan.Gdd.Roboczy is not null ? Visibility.Visible : Visibility.Collapsed;
+            OdswiezPodglad();
+            OdswiezPrzyciski();
             UstawStatus($"Projekt wczytany: {dialog.FileName}");
             DodajWiadomoscBota($"📂 Projekt wczytany z pliku:\n{dialog.FileName}\n\nNazwa projektu: {_stan.NazwaProjektu}");
             if (_stan.Gdd.Zatwierdzony is not null)
@@ -126,13 +149,82 @@ public partial class MainWindow : Window
             DodajWiadomoscBota($"❌ Nie udało się zatwierdzić.\n\n{wynik.Komunikat}");
             UstawStatus("Błąd zatwierdzania.");
         }
+
+        OdswiezPodglad();
+        OdswiezPrzyciski();
     }
 
-    private void PrzetworzWejscie()
+    private void BudujProjekt_Click(object sender, RoutedEventArgs e)
+    {
+        if (_stan.Gdd.Zatwierdzony is null)
+        {
+            DodajWiadomoscBota("⚠ Brak zatwierdzonego GDD do zbudowania.");
+            return;
+        }
+
+        var dlg = new OpenFolderDialog { Title = "Wybierz folder docelowy projektu" };
+        if (dlg.ShowDialog() != true) return;
+
+        var folder = Path.Combine(dlg.FolderName, _stan.NazwaProjektu.Replace(" ", "_"));
+        try
+        {
+            var wynik = ProjectBuilder.Zbuduj(_stan.Gdd.Zatwierdzony, folder);
+            if (wynik.Sukces)
+            {
+                DodajWiadomoscBota($"🔨 {wynik.Komunikat}\n\nWygenerowane pliki ({wynik.LiczbaWygenerowanchPlikow}):\n" +
+                    string.Join("\n", wynik.WygenerowanePliki.Select(p => $"  • {Path.GetFileName(p)}")));
+                UstawStatus($"Projekt zbudowany: {folder}");
+                try { Process.Start(new ProcessStartInfo { FileName = folder, UseShellExecute = true }); }
+                catch (Exception ex) { UstawStatus($"Projekt zbudowany (nie można otworzyć folderu: {ex.Message})"); }
+            }
+            else
+            {
+                DodajWiadomoscBota($"❌ {wynik.Komunikat}");
+            }
+        }
+        catch (Exception ex)
+        {
+            DodajWiadomoscBota($"⚠ Błąd budowania: {ex.Message}");
+        }
+    }
+
+    private void EksportujMd_Click(object sender, RoutedEventArgs e)
+    {
+        var draft = _stan.Gdd.Zatwierdzony ?? _stan.Gdd.Roboczy;
+        if (draft is null)
+        {
+            DodajWiadomoscBota("⚠ Brak GDD do eksportu.");
+            return;
+        }
+
+        var dlg = new SaveFileDialog
+        {
+            Title = "Eksportuj GDD jako Markdown",
+            Filter = "Markdown (*.md)|*.md|Wszystkie pliki (*.*)|*.*",
+            FileName = (draft.Tytul ?? "gdd").Replace(" ", "_"),
+            DefaultExt = ".md"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            File.WriteAllText(dlg.FileName, GddRenderer.RenderujMarkdown(draft), System.Text.Encoding.UTF8);
+            UstawStatus($"GDD wyeksportowane: {dlg.FileName}");
+            DodajWiadomoscBota($"📄 GDD wyeksportowane do:\n{dlg.FileName}");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Błąd eksportu:\n{ex.Message}", "Błąd", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task PrzetworzWejscieAsync()
     {
         var tekst = InputBox.Text.Trim();
         if (string.IsNullOrEmpty(tekst)) return;
 
+        var intencja = AnalizatorIntencji.Analizuj(tekst);
+        _historia.DodajWiadomoscUzytkownika(tekst, intencja);
         DodajWiadomoscUzytkownika(tekst);
         InputBox.Clear();
         SendButton.IsEnabled = false;
@@ -140,9 +232,81 @@ public partial class MainWindow : Window
 
         try
         {
-            GddDraft? draft = ProbujParsowacJson(tekst) ?? BudujDraftZTekstu(tekst);
-            var wynik = WygenerujGreCommand.Wykonaj(_stan, draft);
-            PokazWynik(wynik);
+            switch (intencja)
+            {
+                case IntencjaRozmowy.ZatwierdźGdd:
+                    Zatwierdz_Click(this, new RoutedEventArgs());
+                    break;
+
+                case IntencjaRozmowy.PokazPodglad:
+                    OdswiezPodglad();
+                    var podglad = GddRenderer.RenderujPodgladKrotki(_stan.Gdd.Zatwierdzony ?? _stan.Gdd.Roboczy);
+                    DodajWiadomoscBota(podglad);
+                    break;
+
+                case IntencjaRozmowy.NowaSesja:
+                    NowaSesja_Click(this, new RoutedEventArgs());
+                    break;
+
+                case IntencjaRozmowy.PokazBledy:
+                    var draft0 = _stan.Gdd.Roboczy ?? _stan.Gdd.Zatwierdzony;
+                    if (draft0 is null)
+                    {
+                        DodajWiadomoscBota("ℹ Brak GDD do walidacji.");
+                    }
+                    else
+                    {
+                        var wynikW = GddValidator.Waliduj(draft0);
+                        if (!wynikW.Bledy.Any())
+                        {
+                            DodajWiadomoscBota("✅ GDD jest poprawne – brak błędów.");
+                        }
+                        else
+                        {
+                            var sb0 = new StringBuilder("📋 Wynik walidacji:\n");
+                            foreach (var b in wynikW.Bledy)
+                                sb0.AppendLine($"  [{b.Waznosc}] {b.Komunikat}");
+                            DodajWiadomoscBota(sb0.ToString().TrimEnd());
+                        }
+                    }
+                    break;
+
+                default:
+                    // GenerujGre, EdytujSekcje, Nieznana
+                    GddDraft? draft = ProbujParsowacJson(tekst) ?? BudujDraftZTekstu(tekst);
+                    var wynik = WygenerujGreCommand.Wykonaj(_stan, draft);
+
+                    if (wynik.Status == StatusKomendy.WymagaNaprawy && _ustawieniaLLM.CzySkonfigurowany)
+                    {
+                        DodajWiadomoscBota("⚠ GDD zawiera błędy krytyczne. Wysyłam do AI w celu automatycznej naprawy…");
+                        UstawStatus("AI naprawia GDD…");
+
+                        var orkiestrator = new OrkiestratorNaprawy(new OpenAiKlientLLM(_ustawieniaLLM));
+                        var wynikNaprawy = await orkiestrator.NaprawAsync(wynik.ZadanieNaprawy!, _ustawieniaLLM.MaxPonowien);
+
+                        if (wynikNaprawy.Sukces && wynikNaprawy.NaprawioneDraft is not null)
+                        {
+                            var wynikPonowny = WygenerujGreCommand.Wykonaj(_stan, wynikNaprawy.NaprawioneDraft);
+                            PokazWynik(wynikPonowny);
+                            DodajWiadomoscBota($"🤖 {wynikNaprawy.Komunikat}");
+                        }
+                        else
+                        {
+                            DodajWiadomoscBota($"🤖 {wynikNaprawy.Komunikat}");
+                            PokazWynik(wynik);
+                        }
+                    }
+                    else
+                    {
+                        PokazWynik(wynik);
+                    }
+
+                    OdswiezPodglad();
+                    OdswiezPrzyciski();
+                    break;
+            }
+
+            UstawStatus("Gotowy.");
         }
         catch (Exception ex)
         {
@@ -190,6 +354,41 @@ public partial class MainWindow : Window
         DodajWiadomoscBota(sb.ToString().Trim());
     }
 
+    // ── Helpery odświeżania UI ────────────────────────────────────────────
+
+    private void OdswiezPodglad()
+    {
+        var draft = _stan.Gdd.Zatwierdzony ?? _stan.Gdd.Roboczy;
+        if (draft is null)
+        {
+            PreviewText.Text = "Brak GDD do wyświetlenia.\n\nOpisz swoją grę w polu czatu po lewej stronie.";
+            GddStatusText.Text = "";
+        }
+        else
+        {
+            PreviewText.Text = GddRenderer.RenderujMarkdown(draft);
+            GddStatusText.Text = _stan.Gdd.Zatwierdzony is not null
+                ? "✅ Zatwierdzony"
+                : "⚠ Roboczy (oczekuje na zatwierdzenie)";
+        }
+    }
+
+    private void OdswiezPrzyciski()
+    {
+        bool maRoboczy = _stan.Gdd.Roboczy is not null;
+        bool maZatwierdzony = _stan.Gdd.Zatwierdzony is not null;
+        ApproveButton.Visibility = (maRoboczy && !maZatwierdzony) ? Visibility.Visible : Visibility.Collapsed;
+        BuildButton.Visibility = maZatwierdzony ? Visibility.Visible : Visibility.Collapsed;
+        ExportMdButton.Visibility = (maRoboczy || maZatwierdzony) ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OdswiezStatusLLM()
+    {
+        LlmStatusText.Text = _ustawieniaLLM.CzySkonfigurowany
+            ? $"🤖 AI: {_ustawieniaLLM.Model}"
+            : "🤖 AI: Brak klucza";
+    }
+
     // ── Helpery domenowe ──────────────────────────────────────────────────
 
     private static GddDraft? ProbujParsowacJson(string tekst)
@@ -225,7 +424,6 @@ public partial class MainWindow : Window
 
     private static string WyekstrahujTytul(string tekst)
     {
-        // Spróbuj wyciągnąć tytuł podany po "gra", "gry", "pt.", "tytuł:"
         foreach (var prefix in new[] { "tytuł:", "tytuł :", "pt.", "gra \"", "gry \"", "gra: ", "gry: " })
         {
             var idx = tekst.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
@@ -235,13 +433,11 @@ public partial class MainWindow : Window
             var fragment = (end < 0 ? tekst[start..] : tekst[start..end]).Trim().Trim('"');
             if (fragment.Length > 0) return fragment;
         }
-        // Fallback: pierwsze 60 znaków
         return tekst.Length <= 60 ? tekst : tekst[..60].TrimEnd() + "…";
     }
 
     private static void WyekstrahujRegiony(string tekst, Swiat swiat)
     {
-        // Proste wykrycie regionów po słowach kluczowych rozdzielonych przecinkami / " i "
         var dolny = tekst.ToLowerInvariant();
         var keywords = new[] { "region", "kraina", "obszar", "strefa", "teren" };
         foreach (var kw in keywords)
@@ -251,7 +447,6 @@ public partial class MainWindow : Window
             var fragment = tekst[(idx + kw.Length)..];
             var koniec = fragment.IndexOfAny(['\n', '.', ';']);
             if (koniec > 0) fragment = fragment[..koniec];
-            // Rozdziel po przecinku i koniunkcji " i " (ze spacjami, aby nie kroić środków wyrazów)
             var nazwy = fragment
                 .Split([','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .SelectMany(cz => cz.Split([" i "], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
