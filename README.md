@@ -63,7 +63,7 @@ tests/
 ## Wymagania
 
 - .NET 8.0 SDK
-- Windows (docelowo WinUI 3 / WPF)
+- Windows 10 lub nowszy (WPF)
 
 ## Budowanie i testy
 
@@ -71,6 +71,68 @@ tests/
 dotnet build
 dotnet test
 ```
+
+## Budowanie instalatora
+
+Plik instalacyjny (`AAAGameBuilder-Setup-vX.Y.Z.exe`) jest generowany automatycznie przez CI/CD przy każdym pushu do `main`, pull requeście oraz przy tworzeniu tagu `vX.Y.Z`.
+
+### Automatyczne budowanie przez GitHub Actions
+
+Workflow `.github/workflows/build-installer.yml` wykonuje kolejno:
+1. Przywrócenie zależności i uruchomienie testów
+2. `dotnet publish` – publikacja aplikacji jako self-contained single-file (win-x64, brak wymagania .NET Runtime)
+3. Kompilacja instalatora Inno Setup 6
+4. Wyliczenie sumy kontrolnej SHA-256 i zapis do `SHA256SUMS.txt`
+5. Upload artefaktów do GitHub Actions
+6. *(tylko przy tagu `v*`)* – dołączenie instalatora do GitHub Release
+
+Artefakty są dostępne w zakładce **Actions → wybierz run → Artifacts**.
+
+### Ręczne budowanie
+
+#### 1. Wymagania wstępne
+- [.NET 8.0 SDK](https://dotnet.microsoft.com/download)
+- [Inno Setup 6](https://jrsoftware.org/isdl.php) (zainstalowany w domyślnej lokalizacji)
+
+#### 2. Publikacja aplikacji
+
+```powershell
+dotnet publish src/AAA.App/AAA.App.csproj `
+  --configuration Release `
+  --runtime win-x64 `
+  --self-contained true `
+  --output publish `
+  -p:PublishSingleFile=true `
+  -p:EnableCompressionInSingleFile=true `
+  -p:IncludeNativeLibrariesForSelfExtract=true
+```
+
+#### 3. Kompilacja instalatora
+
+```cmd
+"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\setup.iss
+```
+
+Wynikowy plik `AAAGameBuilder-Setup-v1.0.0.exe` zostanie zapisany w katalogu `artifacts\`.
+
+#### 4. Tworzenie oficjalnego Release
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+GitHub Actions automatycznie zbuduje instalator i dołączy go do Release.
+
+### Zawartość instalatora
+
+Instalator (Inno Setup 6) wykonuje:
+- Instalację aplikacji do `%ProgramFiles%\AAA Game Builder\`
+- Utworzenie grupy w Menu Start
+- Opcjonalny skrót na pulpicie
+- Wpis w Panelu Sterowania → Dodaj/Usuń programy (z ikoną i wersją)
+- Możliwość uruchomienia aplikacji po zakończeniu instalacji
+- Czysty dezinstalator usuwający wszystkie pliki aplikacji
 
 ## Licencja
 

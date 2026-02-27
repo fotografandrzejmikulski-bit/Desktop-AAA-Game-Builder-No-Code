@@ -33,7 +33,7 @@ jobs:
         run: dotnet restore
 
       - name: Uruchom testy
-        run: dotnet test --no-restore --configuration Release --verbosity minimal
+        run: dotnet test --no-restore --configuration Release --verbosity normal
 
       - name: Opublikuj aplikację (self-contained, win-x64)
         run: |
@@ -48,17 +48,22 @@ jobs:
 
       - name: Pobierz numer wersji
         id: get_version
-        shell: bash
+        shell: pwsh
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-          else
-            echo "version=1.0.0-dev" >> $GITHUB_OUTPUT
-          fi
+          if ("${{ github.ref }}" -match "^refs/tags/v(.+)$") {
+            $ver = $Matches[1]
+          } else {
+            # Odczytaj wersję z pliku projektu i dodaj numer uruchomienia
+            [xml]$csproj = Get-Content "${{ env.PROJECT_PATH }}"
+            $base = $csproj.Project.PropertyGroup.Version | Select-Object -First 1
+            if (-not $base) { $base = "1.0.0" }
+            $ver = "$base-dev.${{ github.run_number }}"
+          }
+          "version=$ver" >> $env:GITHUB_OUTPUT
+          Write-Host "Wersja instalatora: $ver"
 
       - name: Zainstaluj Inno Setup
-        run: |
-          choco install innosetup --no-progress -y
+        run: choco install innosetup --no-progress -y
 
       - name: Utwórz katalog artifacts
         run: New-Item -ItemType Directory -Force -Path ${{ env.ARTIFACTS_DIR }}
@@ -70,15 +75,47 @@ jobs:
             /DOutputBaseFilename="AAAGameBuilder-Setup-v${{ steps.get_version.outputs.version }}" `
             installer\setup.iss
 
+      - name: Oblicz sumę kontrolną SHA-256
+        id: checksum
+        shell: pwsh
+        run: |
+          $file = Get-ChildItem "${{ env.ARTIFACTS_DIR }}\*.exe" | Select-Object -First 1
+          $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLower()
+          "$($file.Name)  $hash" | Out-File "${{ env.ARTIFACTS_DIR }}\SHA256SUMS.txt" -Encoding utf8
+          "sha256=$hash" >> $env:GITHUB_OUTPUT
+          "filename=$($file.Name)" >> $env:GITHUB_OUTPUT
+          Write-Host "SHA-256: $hash  $($file.Name)"
+
+      - name: Podsumowanie kompilacji
+        shell: pwsh
+        run: |
+          $size = [math]::Round((Get-ChildItem "${{ env.ARTIFACTS_DIR }}\*.exe" | Select-Object -First 1).Length / 1MB, 2)
+          @"
+          ## ✅ Instalator zbudowany pomyślnie
+
+          | Pole             | Wartość |
+          |------------------|---------|
+          | **Wersja**       | ${{ steps.get_version.outputs.version }} |
+          | **Plik**         | ${{ steps.checksum.outputs.filename }} |
+          | **Rozmiar**      | $size MB |
+          | **SHA-256**      | ``${{ steps.checksum.outputs.sha256 }}`` |
+          | **Platforma**    | Windows x64 (self-contained) |
+          | **Wymagany OS**  | Windows 10 lub nowszy |
+          "@ | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+
       - name: Opublikuj instalator jako artefakt
         uses: actions/upload-artifact@v4
         with:
           name: AAAGameBuilder-Installer-${{ steps.get_version.outputs.version }}
-          path: ${{ env.ARTIFACTS_DIR }}\*.exe
+          path: |
+            ${{ env.ARTIFACTS_DIR }}\*.exe
+            ${{ env.ARTIFACTS_DIR }}\SHA256SUMS.txt
           if-no-files-found: error
 
       - name: Dołącz do Release (tylko przy tagu)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.ARTIFACTS_DIR }}\*.exe
+          files: |
+            ${{ env.ARTIFACTS_DIR }}\*.exe
+            ${{ env.ARTIFACTS_DIR }}\SHA256SUMS.txt
