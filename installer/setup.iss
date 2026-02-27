@@ -30,7 +30,6 @@ DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=..\artifacts
 OutputBaseFilename={#OutputBaseFilename}
-SetupIconFile=..\src\AAA.App\Assets\icon.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
