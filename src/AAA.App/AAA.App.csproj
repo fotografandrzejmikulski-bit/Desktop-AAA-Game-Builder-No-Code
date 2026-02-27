@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>AAAGameBuilder</AssemblyName>
+    <RootNamespace>AAA.App</RootNamespace>
+    <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
+    <Version>1.0.0</Version>
+    <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0</InformationalVersion>
+    <Company>fotografandrzejmikulski-bit</Company>
+    <Product>Desktop AAA Game Builder – No Code</Product>
+    <Copyright>Copyright © 2026</Copyright>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AAA.Core\AAA.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\icon.ico" Condition="Exists('Assets\icon.ico')" />
+  </ItemGroup>
+</Project>

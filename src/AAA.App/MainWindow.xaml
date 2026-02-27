@@ -1,0 +1,197 @@
+<Window x:Class="AAA.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="AAA Game Builder – No Code"
+        Height="740" Width="1200" MinHeight="480" MinWidth="640"
+        Background="{StaticResource BackgroundBrush}"
+        FontFamily="Segoe UI">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <!-- Header -->
+            <RowDefinition Height="56"/>
+            <!-- Content -->
+            <RowDefinition Height="*"/>
+            <!-- Input area -->
+            <RowDefinition Height="Auto"/>
+            <!-- Status bar -->
+            <RowDefinition Height="28"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" MinWidth="300"/>
+            <ColumnDefinition Width="4"/>
+            <ColumnDefinition Width="360" MinWidth="200"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Grid.ColumnSpan="3" Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource AccentBrush}" BorderThickness="0,0,0,1">
+            <Grid Margin="16,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="🎮" FontSize="24" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="AAA Game Builder – No Code"
+                               Foreground="{StaticResource TextBrush}"
+                               FontSize="16" FontWeight="Bold"/>
+                    <TextBlock Text="Opisz swoją grę po polsku, a ja ją zaprojektuję"
+                               Foreground="{StaticResource SubtextBrush}"
+                               FontSize="11"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="⚙ Ustawienia" Style="{StaticResource SendButtonStyle}"
+                            Background="#37474F" FontSize="12" Padding="10,6" Margin="0,0,8,0"
+                            Click="Ustawienia_Click"/>
+                    <Button Content="📂 Otwórz" Style="{StaticResource SendButtonStyle}"
+                            Background="#37474F" FontSize="12" Padding="10,6" Margin="0,0,8,0"
+                            Click="OtworzProjekt_Click"/>
+                    <Button Content="💾 Zapisz" Style="{StaticResource SendButtonStyle}"
+                            Background="#37474F" FontSize="12" Padding="10,6" Margin="0,0,8,0"
+                            Click="ZapiszProjekt_Click"/>
+                    <Button Content="🗑 Nowa sesja" Style="{StaticResource SendButtonStyle}"
+                            Background="#37474F" FontSize="12" Padding="10,6"
+                            Click="NowaSesja_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Chat scrollview (Col 0) -->
+        <ScrollViewer x:Name="ChatScroll" Grid.Row="1" Grid.Column="0"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Padding="12,8"
+                      Background="{StaticResource BackgroundBrush}">
+            <ItemsControl x:Name="ChatItems">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="2,4">
+                            <!-- User message – aligned right -->
+                            <Border Style="{StaticResource ChatBubbleBase}"
+                                    Background="{StaticResource UserBubbleBrush}"
+                                    HorizontalAlignment="Right"
+                                    Visibility="{Binding UserVisibility}">
+                                <TextBlock Text="{Binding Text}"
+                                           Foreground="White"
+                                           FontSize="13"
+                                           TextWrapping="Wrap"/>
+                            </Border>
+                            <!-- Bot message – aligned left -->
+                            <Border Style="{StaticResource ChatBubbleBase}"
+                                    Background="{StaticResource BotBubbleBrush}"
+                                    HorizontalAlignment="Left"
+                                    Visibility="{Binding BotVisibility}">
+                                <TextBlock Text="{Binding Text}"
+                                           Foreground="{StaticResource TextBrush}"
+                                           FontSize="13"
+                                           TextWrapping="Wrap"/>
+                            </Border>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Splitter (Col 1) -->
+        <GridSplitter Grid.Row="1" Grid.Column="1" Width="4"
+                      HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                      Background="#0D47A1" Cursor="SizeWE" ResizeDirection="Columns"/>
+
+        <!-- Preview Panel (Col 2) -->
+        <Grid Grid.Row="1" Grid.Column="2" Background="{StaticResource SurfaceBrush}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <!-- Panel header -->
+            <Border Grid.Row="0" Background="#0F3460" BorderBrush="{StaticResource AccentBrush}" BorderThickness="0,0,0,1" Padding="10,6">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="📋 Podgląd GDD" Foreground="{StaticResource TextBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button x:Name="ExportMdButton" Content="📄 Eksportuj MD"
+                                Style="{StaticResource SendButtonStyle}"
+                                Background="#37474F" FontSize="11" Padding="8,4" Margin="0,0,4,0"
+                                Visibility="Collapsed" Click="EksportujMd_Click"/>
+                        <Button x:Name="BuildButton" Content="🔨 Buduj projekt"
+                                Style="{StaticResource SendButtonStyle}"
+                                Background="#2E7D32" FontSize="11" Padding="8,4"
+                                Visibility="Collapsed" Click="BudujProjekt_Click"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+            <!-- Preview content -->
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="12,8">
+                <TextBlock x:Name="PreviewText"
+                           Foreground="{StaticResource TextBrush}"
+                           FontSize="12" TextWrapping="Wrap"
+                           FontFamily="Consolas"
+                           Text="Brak GDD do wyświetlenia.&#x0a;&#x0a;Opisz swoją grę w polu czatu po lewej stronie."/>
+            </ScrollViewer>
+            <!-- GDD status strip -->
+            <Border Grid.Row="2" Background="#0F3460" Padding="10,4">
+                <TextBlock x:Name="GddStatusText"
+                           Foreground="{StaticResource SubtextBrush}"
+                           FontSize="11"/>
+            </Border>
+        </Grid>
+
+        <!-- Input area (Row 2, spanning all columns) -->
+        <Border Grid.Row="2" Grid.ColumnSpan="3" Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource AccentBrush}" BorderThickness="0,1,0,0"
+                Padding="12,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="InputBox"
+                         Grid.Column="0"
+                         Style="{StaticResource InputBoxStyle}"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         MaxHeight="100"
+                         VerticalScrollBarVisibility="Auto"
+                         Margin="0,0,8,0"
+                         KeyDown="InputBox_KeyDown"/>
+                <Button x:Name="SendButton"
+                        Grid.Column="1"
+                        Content="Wyślij ▶"
+                        Style="{StaticResource SendButtonStyle}"
+                        Margin="0,0,8,0"
+                        Click="Wyslij_Click"/>
+                <Button x:Name="ApproveButton"
+                        Grid.Column="2"
+                        Content="✔ Zatwierdź GDD"
+                        Style="{StaticResource SendButtonStyle}"
+                        Background="#2E7D32"
+                        Visibility="Collapsed"
+                        Click="Zatwierdz_Click"/>
+            </Grid>
+        </Border>
+
+        <!-- Status bar (Row 3, spanning all columns) -->
+        <Border Grid.Row="3" Grid.ColumnSpan="3" Background="{StaticResource SurfaceBrush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="StatusBar" Grid.Column="0"
+                           Text="Gotowy"
+                           Foreground="{StaticResource SubtextBrush}"
+                           FontSize="11" VerticalAlignment="Center" Margin="14,0"/>
+                <TextBlock x:Name="LlmStatusText" Grid.Column="1"
+                           Foreground="{StaticResource SubtextBrush}"
+                           FontSize="11" VerticalAlignment="Center" Margin="0,0,14,0"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
