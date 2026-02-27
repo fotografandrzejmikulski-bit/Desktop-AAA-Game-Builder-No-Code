@@ -2,11 +2,16 @@ name: Build & Package Installer
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'copilot/**' ]
     tags:     [ 'v*' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Wersja instalatora (np. 1.0.0). Pozostaw puste – wersja z csproj.'
+        required: false
+        default: ''
 
 env:
   DOTNET_VERSION: '8.0.x'
@@ -50,10 +55,16 @@ jobs:
         id: get_version
         shell: pwsh
         run: |
-          if ("${{ github.ref }}" -match "^refs/tags/v(.+)$") {
+          # 1. Ręczne uruchomienie z podaną wersją
+          if ("${{ github.event.inputs.version }}" -ne "") {
+            $ver = "${{ github.event.inputs.version }}"
+          }
+          # 2. Tag v* → wersja z tagu
+          elseif ("${{ github.ref }}" -match "^refs/tags/v(.+)$") {
             $ver = $Matches[1]
-          } else {
-            # Odczytaj wersję z pliku projektu i dodaj numer uruchomienia
+          }
+          # 3. Branch/PR → wersja z csproj + numer uruchomienia
+          else {
             [xml]$csproj = Get-Content "${{ env.PROJECT_PATH }}"
             $base = $csproj.Project.PropertyGroup.Version | Select-Object -First 1
             if (-not $base) { $base = "1.0.0" }
