@@ -1,0 +1,82 @@
+name: Build & Package Installer
+
+on:
+  push:
+    branches: [ main ]
+    tags:     [ 'v*' ]
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  PROJECT_PATH:   'src/AAA.App/AAA.App.csproj'
+  PUBLISH_DIR:    'publish'
+  ARTIFACTS_DIR:  'artifacts'
+
+jobs:
+  build-installer:
+    runs-on: windows-latest
+    permissions:
+      contents: write   # potrzebne do dołączania plików do Release przy tagu
+
+    steps:
+      - name: Pobierz kod
+        uses: actions/checkout@v4
+
+      - name: Skonfiguruj .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Przywróć zależności
+        run: dotnet restore
+
+      - name: Uruchom testy
+        run: dotnet test --no-restore --configuration Release --verbosity minimal
+
+      - name: Opublikuj aplikację (self-contained, win-x64)
+        run: |
+          dotnet publish ${{ env.PROJECT_PATH }} `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            --output ${{ env.PUBLISH_DIR }} `
+            -p:PublishSingleFile=true `
+            -p:EnableCompressionInSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true
+
+      - name: Pobierz numer wersji
+        id: get_version
+        shell: bash
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          else
+            echo "version=1.0.0-dev" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Zainstaluj Inno Setup
+        run: |
+          choco install innosetup --no-progress -y
+
+      - name: Utwórz katalog artifacts
+        run: New-Item -ItemType Directory -Force -Path ${{ env.ARTIFACTS_DIR }}
+
+      - name: Skompiluj instalator Inno Setup
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            /DMyAppVersion="${{ steps.get_version.outputs.version }}" `
+            /DOutputBaseFilename="AAAGameBuilder-Setup-v${{ steps.get_version.outputs.version }}" `
+            installer\setup.iss
+
+      - name: Opublikuj instalator jako artefakt
+        uses: actions/upload-artifact@v4
+        with:
+          name: AAAGameBuilder-Installer-${{ steps.get_version.outputs.version }}
+          path: ${{ env.ARTIFACTS_DIR }}\*.exe
+          if-no-files-found: error
+
+      - name: Dołącz do Release (tylko przy tagu)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ARTIFACTS_DIR }}\*.exe
