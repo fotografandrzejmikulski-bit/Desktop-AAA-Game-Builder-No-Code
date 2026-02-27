@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
+using Microsoft.Win32;
 using AAA.Core.Conversation;
 using AAA.Core.GameDesign.Models;
 using AAA.Core.GameDesign.Validation;
@@ -58,6 +59,55 @@ public partial class MainWindow : Window
             ApproveButton.Visibility = Visibility.Collapsed;
             UstawStatus("Nowa sesja – gotowy.");
             DodajWiadomoscBota("Sesja zresetowana. Opisz nową grę.");
+        }
+    }
+
+    private void ZapiszProjekt_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title = "Zapisz projekt",
+            Filter = "Projekt GDD (*.gdd.json)|*.gdd.json|Wszystkie pliki (*.*)|*.*",
+            FileName = _stan.NazwaProjektu,
+            DefaultExt = ".gdd.json"
+        };
+        if (dialog.ShowDialog() != true) return;
+        try
+        {
+            _stan.DataModyfikacji = DateTime.UtcNow;
+            _stan.ZapiszDoPliku(dialog.FileName);
+            UstawStatus($"Projekt zapisany: {dialog.FileName}");
+            DodajWiadomoscBota($"✅ Projekt zapisany do pliku:\n{dialog.FileName}");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Nie udało się zapisać projektu:\n{ex.Message}", "Błąd zapisu", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void OtworzProjekt_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Otwórz projekt",
+            Filter = "Projekt GDD (*.gdd.json)|*.gdd.json|Wszystkie pliki (*.*)|*.*"
+        };
+        if (dialog.ShowDialog() != true) return;
+        try
+        {
+            _stan = ProjectState.WczytajZPliku(dialog.FileName);
+            _wiadomosci.Clear();
+            ApproveButton.Visibility = _stan.Gdd.Roboczy is not null ? Visibility.Visible : Visibility.Collapsed;
+            UstawStatus($"Projekt wczytany: {dialog.FileName}");
+            DodajWiadomoscBota($"📂 Projekt wczytany z pliku:\n{dialog.FileName}\n\nNazwa projektu: {_stan.NazwaProjektu}");
+            if (_stan.Gdd.Zatwierdzony is not null)
+                DodajWiadomoscBota("ℹ Projekt zawiera zatwierdzony GDD. Możesz kontynuować pracę.");
+            else if (_stan.Gdd.Roboczy is not null)
+                DodajWiadomoscBota("ℹ Projekt zawiera roboczy GDD oczekujący na zatwierdzenie.");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Nie udało się otworzyć projektu:\n{ex.Message}", "Błąd odczytu", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

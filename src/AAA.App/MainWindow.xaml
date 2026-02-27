@@ -37,6 +37,12 @@
                                FontSize="11"/>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+                    <Button Content="📂 Otwórz" Style="{StaticResource SendButtonStyle}"
+                            Background="#37474F" FontSize="12" Padding="10,6"
+                            Click="OtworzProjekt_Click"/>
+                    <Button Content="💾 Zapisz" Style="{StaticResource SendButtonStyle}"
+                            Background="#37474F" FontSize="12" Padding="10,6"
+                            Click="ZapiszProjekt_Click"/>
                     <Button Content="🗑 Nowa sesja" Style="{StaticResource SendButtonStyle}"
                             Background="#37474F" FontSize="12" Padding="10,6"
                             Click="NowaSesja_Click"/>
